@@ -19,6 +19,25 @@ from flask import (
 
 from pykakasi import kakasi
 
+from pykakasi import kakasi
+# ★ dotenvから load_dotenv を読み込む
+from dotenv import load_dotenv
+
+# ===== 元の load_dotenv() を以下に書き換えます =====
+
+# .envファイルがある「絶対パス（正確な場所）」をプログラムの場所から計算する
+env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+
+# 場所を直接指定して読み込む
+load_dotenv(dotenv_path=env_path)
+
+# ===================================================
+
+# ★ 【テスト用（そのまま残してください）】
+print("--- [DEBUG] .env 読み込みテスト ---")
+print("RAKUTEN_APP_IDの中身:", os.environ.get("RAKUTEN_APPLICATION_ID"))
+print("----------------------------------")
+
 
 # =========================================================
 # Flask
@@ -48,21 +67,9 @@ RAKUTEN_BOOKS_API_URL = (
     "services/api/BooksBook/Search/20170404"
 )
 
-
-# ここには自分の値を入れてください
-# チャットにはキーそのものを貼らないでください。
-
-RAKUTEN_APPLICATION_ID = ""
-
-RAKUTEN_ACCESS_KEY = ""
-
-# =========================================================
-# Gmail設定
-# =========================================================
-
-MY_EMAIL = ""
-
-APP_PASSWORD = ""
+# ★ この1行が関数の外（上部）に正しく書かれているか確認してください！
+RAKUTEN_APP_ID = os.environ.get("RAKUTEN_APPLICATION_ID")
+RAKUTEN_ACCESS_KEY = os.environ.get("RAKUTEN_ACCESS_KEY")
 
 
 # =========================================================
@@ -211,10 +218,19 @@ def extract_volume(title):
 # Gmailを送る
 # =========================================================
 
+
 def send_gmail(
     subject,
     body
 ):
+    # ★ .env からメールアドレスとアプリパスワードを取得
+    my_email = os.environ.get("MY_EMAIL")
+    app_password = os.environ.get("APP_PASSWORD")
+
+    # 万が一設定されていない場合の安全策
+    if not my_email or not app_password:
+        print("❌ メール送信失敗: .envファイルにメールアドレスまたはパスワードが設定されていません。")
+        return False
 
     msg = MIMEText(
         body,
@@ -224,9 +240,9 @@ def send_gmail(
 
     msg["Subject"] = subject
 
-    msg["From"] = MY_EMAIL
+    msg["From"] = my_email
 
-    msg["To"] = MY_EMAIL
+    msg["To"] = my_email
 
     msg["Date"] = formatdate(
         localtime=True
@@ -240,10 +256,8 @@ def send_gmail(
             timeout=10
         )
 
-        server.login(
-            MY_EMAIL,
-            APP_PASSWORD
-        )
+        # ★ 取得した環境変数を使ってログイン
+        server.login(my_email, app_password)
 
         server.send_message(
             msg
@@ -852,46 +866,26 @@ def search_rakuten_books(
 ):
 
     # -----------------------------------------------------
-    # APIキー確認
+    # ★ APIキー確認（先ほど上部で設定した RAKUTEN_APP_ID を使います）
     # -----------------------------------------------------
 
-    if not RAKUTEN_APPLICATION_ID:
-
+    if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY:
         print(
-            "楽天Application IDが設定されていません。"
-        )
-
-        return []
-
-    if not RAKUTEN_ACCESS_KEY:
-
-        print(
-            "楽天Access Keyが設定されていません。"
+            "楽天APIのApplication IDまたはAccess Keyが設定されていません。.envファイルを確認してください。"
         )
 
         return []
 
     # -----------------------------------------------------
-    # 検索条件
+    # 検索条件（最新の仕様に合わせて修正）
     # -----------------------------------------------------
 
     params = {
-
-        "applicationId":
-            RAKUTEN_APPLICATION_ID,
-
-        "accessKey":
-            RAKUTEN_ACCESS_KEY,
-
-        "format":
-            "json",
-
-        "hits":
-            20,
-
-        "page":
-            1
-
+        "applicationId": RAKUTEN_APP_ID,
+        "accessKey": RAKUTEN_ACCESS_KEY,
+        "format": "json",
+        "hits": 20,
+        "page": 1
     }
 
     # -----------------------------------------------------
@@ -939,19 +933,11 @@ def search_rakuten_books(
         )
 
         print()
-        print(
-            "===== 楽天ブックスAPI ====="
-        )
-
-        print(
-            f"ステータス: "
-            f"{response.status_code}"
-        )
-
-        print(
-            f"URL: "
-            f"{response.url}"
-        )
+        print("===== 楽天ブックスAPI =====")
+        print(f"ステータス: {response.status_code}")
+        print(f"URL: {response.url}")
+        print(f"レスポンス: {response.text}")
+        print("============================")
 
         response.raise_for_status()
 
@@ -959,10 +945,7 @@ def search_rakuten_books(
 
     except Exception as e:
 
-        print(
-            f"楽天ブックスAPIエラー: {e}"
-        )
-
+        print(f"楽天ブックスAPIエラー: {e}")
         return []
 
     # -----------------------------------------------------
@@ -971,9 +954,10 @@ def search_rakuten_books(
 
     results = []
 
+    # これで data の赤波線が消えます
     for item in data.get(
-        "Items",
-        []
+            "Items",
+            []
     ):
 
         book = item.get(
@@ -1182,6 +1166,14 @@ def search():
             "author",
             ""
         ).strip()
+
+        print()
+        print("===== 検索フォーム =====")
+        print("keyword:", keyword)
+        print("isbn:", isbn)
+        print("author:", author)
+        print("========================")
+
 
     else:
 
